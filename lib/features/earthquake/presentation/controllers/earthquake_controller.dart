@@ -1,12 +1,13 @@
+import 'dart:async';
+
+import 'package:earthqforcast/core/controllers/location_controller.dart';
+import 'package:earthqforcast/core/services/notification_service.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/earthquake_model.dart';
 import '../../data/models/news_model.dart';
-import '../../domain/repositories/earthquake_repository.dart';
 import '../../data/sources/earthquake_api.dart'; // For news
-import 'package:earthqforcast/core/controllers/location_controller.dart';
-import 'dart:async';
-import 'package:earthqforcast/core/services/notification_service.dart';
+import '../../domain/repositories/earthquake_repository.dart';
 
 class EarthquakeController extends GetxController {
   final EarthquakeRepository _repository = Get.find<EarthquakeRepository>();
@@ -40,9 +41,12 @@ class EarthquakeController extends GetxController {
   void onInit() {
     super.onInit();
     _notificationService.init();
-    fetchAllData();
-    // Poll every 2 minutes
-    _timer = Timer.periodic(const Duration(minutes: 2), (_) => fetchAllData());
+    fetchAllData(); // Initial load
+    // Poll every 2 minutes - use background refresh mode
+    _timer = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => fetchAllData(isBackgroundRefresh: true),
+    );
 
     // Listen to location changes to resort if needed
     // Listen to location changes to resort if needed
@@ -134,8 +138,14 @@ class EarthquakeController extends GetxController {
     return list;
   }
 
-  Future<void> fetchAllData() async {
-    isLoading.value = true;
+  Future<void> fetchAllData({bool isBackgroundRefresh = false}) async {
+    // Use isUpdating for background refresh, isLoading for initial load
+    if (isBackgroundRefresh) {
+      isUpdating.value = true;
+    } else {
+      isLoading.value = true;
+    }
+
     errorMessage.value = '';
     try {
       // Fetch Recent
@@ -218,7 +228,9 @@ class EarthquakeController extends GetxController {
     } catch (e) {
       errorMessage.value = 'Failed to load data: $e';
     } finally {
+      // Reset both flags
       isLoading.value = false;
+      isUpdating.value = false;
     }
   }
 
