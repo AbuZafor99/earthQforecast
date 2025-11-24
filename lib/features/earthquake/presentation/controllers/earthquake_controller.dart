@@ -59,13 +59,26 @@ class EarthquakeController extends GetxController {
       list = recentEarthquakes;
     }
 
-    // Apply Search
+    // Apply Search - More flexible matching
     if (searchQuery.value.isNotEmpty) {
-      final query = searchQuery.value.toLowerCase();
+      final query = searchQuery.value.toLowerCase().trim();
       list = list.where((e) {
-        final titleMatch = e.title.toLowerCase().contains(query);
-        final placeMatch = e.place.toLowerCase().contains(query);
-        return titleMatch || placeMatch;
+        final title = e.title.toLowerCase();
+        final place = e.place.toLowerCase();
+
+        // Check if the query contains the search term or vice versa
+        // This allows "Bangladesh" to match "M 4.5 - 25 km NE of Dhaka, Bangladesh"
+        final titleMatch = title.contains(query);
+        final placeMatch = place.contains(query);
+
+        // Also split query into words and check if any word matches
+        final queryWords = query.split(' ');
+        final anyWordMatch = queryWords.any((word) {
+          if (word.length < 2) return false; // Skip very short words
+          return title.contains(word) || place.contains(word);
+        });
+
+        return titleMatch || placeMatch || anyWordMatch;
       }).toList();
     }
 
