@@ -25,6 +25,11 @@ class EarthquakeController extends GetxController {
   final RxString errorMessage = ''.obs;
   final RxBool isMapDarkMode = true.obs; // Default to dark mode
 
+  // News filtering
+  final RxString newsSearchQuery = ''.obs;
+  final RxString selectedCountry = 'global'.obs;
+  final RxList<NewsModel> forecastNews = <NewsModel>[].obs;
+
   Timer? _timer;
   final NotificationService _notificationService = NotificationService();
 
@@ -52,6 +57,45 @@ class EarthquakeController extends GetxController {
   }
 
   List<EarthquakeModel> get filteredEarthquakes {
+    // If there's a search query, search across ALL data (both recent and significant)
+    if (searchQuery.value.isNotEmpty) {
+      final query = searchQuery.value.toLowerCase().trim();
+
+      // Combine all earthquake data for search
+      final allEarthquakes = [...recentEarthquakes, ...significantEarthquakes];
+
+      // Remove duplicates based on ID
+      final uniqueEarthquakes = <String, EarthquakeModel>{};
+      for (var eq in allEarthquakes) {
+        uniqueEarthquakes[eq.id] = eq;
+      }
+
+      // Search across all unique earthquakes
+      final searchResults = uniqueEarthquakes.values.where((e) {
+        final title = e.title.toLowerCase();
+        final place = e.place.toLowerCase();
+
+        // Check if the query contains the search term or vice versa
+        final titleMatch = title.contains(query);
+        final placeMatch = place.contains(query);
+
+        // Also split query into words and check if any word matches
+        final queryWords = query.split(' ');
+        final anyWordMatch = queryWords.any((word) {
+          if (word.length < 2) return false;
+          return title.contains(word) || place.contains(word);
+        });
+
+        return titleMatch || placeMatch || anyWordMatch;
+      }).toList();
+
+      // Sort by time (most recent first)
+      searchResults.sort((a, b) => b.time.compareTo(a.time));
+
+      return searchResults;
+    }
+
+    // If no search query, apply normal filtering
     List<EarthquakeModel> list;
     if (filterType.value == 'Significant') {
       list = significantEarthquakes;
@@ -59,45 +103,36 @@ class EarthquakeController extends GetxController {
       list = recentEarthquakes;
     }
 
-    // Apply Search - More flexible matching
-    if (searchQuery.value.isNotEmpty) {
-      final query = searchQuery.value.toLowerCase().trim();
-      list = list.where((e) {
-        final title = e.title.toLowerCase();
-        final place = e.place.toLowerCase();
-
-        // Check if the query contains the search term or vice versa
-        // This allows "Bangladesh" to match "M 4.5 - 25 km NE of Dhaka, Bangladesh"
-        final titleMatch = title.contains(query);
-        final placeMatch = place.contains(query);
-
-        // Also split query into words and check if any word matches
-        final queryWords = query.split(' ');
-        final anyWordMatch = queryWords.any((word) {
-          if (word.length < 2) return false; // Skip very short words
-          return title.contains(word) || place.contains(word);
-        });
-
-        return titleMatch || placeMatch || anyWordMatch;
-      }).toList();
-    }
-
-    // Apply 'Near Me' filter (e.g., within 1000km)
-    // Apply 'Near Me' filter (e.g., within 1000km)
+    // Apply Filter
     if (filterType.value == 'Near Me') {
-      if (_locationController.userLocation.value != null) {
-        list = list.where((e) {
-          final dist = _locationController.calculateDistance(
-            e.latitude,
-            e.longitude,
-          );
-          return dist < 1000; // 1000 km radius
-        }).toList();
-      } else {
-        // If location is not available, return empty list for "Near Me"
-        // Or handle it in UI. For now, empty list to avoid confusion.
-        list = [];
+      final userPos = _locationController.currentPosition.value;
+      if (userPos == null) {
+        // If no location available, return empty list with a message
+        print('Location not available for Near Me filter');
+        return [];
       }
+
+      // Filter earthquakes within 1000 km of user location
+      list = list.where((e) {
+        final distance = _locationController.calculateDistance(
+          e.latitude,
+          e.longitude,
+        );
+        return distance <= 1000; // Within 1000 km
+      }).toList();
+
+      // Sort by distance
+      list.sort((a, b) {
+        final distA = _locationController.calculateDistance(
+          a.latitude,
+          a.longitude,
+        );
+        final distB = _locationController.calculateDistance(
+          b.latitude,
+          b.longitude,
+        );
+        return distA.compareTo(distB);
+      });
     }
 
     return list;
@@ -139,8 +174,16 @@ class EarthquakeController extends GetxController {
 
       // Fetch News
       try {
-        final newsData = await Get.find<ApiService>().getEarthquakeNews();
+        final newsData = await Get.find<ApiService>().getEarthquakeNews(
+          country: selectedCountry.value,
+        );
         news.value = newsData;
+
+        // Fetch Forecast News
+        final forecastData = await Get.find<ApiService>().getForecastNews(
+          country: selectedCountry.value,
+        );
+        forecastNews.value = forecastData;
       } catch (e) {
         print("Error fetching news: $e");
       }
@@ -180,5 +223,46 @@ class EarthquakeController extends GetxController {
 
   double getDistanceFromUser(double lat, double lng) {
     return _locationController.calculateDistance(lat, lng);
+  }
+
+  // Filtered news based on search query
+  List<NewsModel> get filteredNews {
+    if (newsSearchQuery.value.isEmpty) return news;
+
+    final query = newsSearchQuery.value.toLowerCase();
+    return news.where((n) {
+      return n.title.toLowerCase().contains(query) ||
+          n.description.toLowerCase().contains(query) ||
+          n.sourceName.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  // Filtered forecast news based on search query
+  List<NewsModel> get filteredForecastNews {
+    if (newsSearchQuery.value.isEmpty) return forecastNews;
+
+    final query = newsSearchQuery.value.toLowerCase();
+    return forecastNews.where((n) {
+      return n.title.toLowerCase().contains(query) ||
+          n.description.toLowerCase().contains(query) ||
+          n.sourceName.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  // Refresh news with current country filter
+  Future<void> refreshNews() async {
+    try {
+      final newsData = await Get.find<ApiService>().getEarthquakeNews(
+        country: selectedCountry.value,
+      );
+      news.value = newsData;
+
+      final forecastData = await Get.find<ApiService>().getForecastNews(
+        country: selectedCountry.value,
+      );
+      forecastNews.value = forecastData;
+    } catch (e) {
+      print("Error refreshing news: $e");
+    }
   }
 }
