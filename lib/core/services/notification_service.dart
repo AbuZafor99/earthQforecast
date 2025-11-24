@@ -60,6 +60,7 @@ class NotificationService {
           importance: Importance.max,
           priority: Priority.high,
           ticker: 'ticker',
+          icon: 'ic_notification', // Custom notification icon
         );
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
