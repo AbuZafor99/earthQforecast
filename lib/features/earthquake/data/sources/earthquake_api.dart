@@ -108,6 +108,9 @@ class ApiService {
     final geometry = event['geometry'] ?? {};
     final coordinates = geometry['coordinates'] ?? [0.0, 0.0, 0.0];
 
+    final lat = (coordinates[1] ?? 0.0).toDouble();
+    final lng = (coordinates[0] ?? 0.0).toDouble();
+
     return EarthquakeModel(
       id: event['id'] ?? 'emsc_${DateTime.now().millisecondsSinceEpoch}',
       magnitude: (properties['mag'] ?? 0.0).toDouble(),
@@ -115,13 +118,14 @@ class ApiService {
       time: DateTime.parse(
         properties['time'] ?? DateTime.now().toIso8601String(),
       ).millisecondsSinceEpoch,
-      latitude: (coordinates[1] ?? 0.0).toDouble(),
-      longitude: (coordinates[0] ?? 0.0).toDouble(),
+      latitude: lat,
+      longitude: lng,
       depth: (coordinates[2] ?? 0.0).toDouble(),
       title:
           'M ${(properties['mag'] ?? 0.0).toDouble().toStringAsFixed(1)} - ${properties['flynn_region'] ?? properties['place'] ?? 'Unknown'}',
       url: '', // EMSC doesn't provide URL in same format
       tsunami: 0, // EMSC doesn't provide tsunami info
+      continent: 'Unknown', // Will be calculated in model constructor
     );
   }
 

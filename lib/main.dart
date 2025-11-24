@@ -7,6 +7,8 @@ import 'core/controllers/location_controller.dart';
 import 'core/controllers/theme_controller.dart';
 import 'core/init/app_initializer.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/app_lifecycle_service.dart';
+import 'core/utils/continent_utils.dart';
 import 'core/widgets/custom_bottom_nav_bar.dart';
 import 'features/earthquake/data/sources/earthquake_api.dart';
 import 'features/earthquake/presentation/controllers/earthquake_controller.dart';
@@ -23,21 +25,80 @@ void callbackDispatcher() {
       final notificationService = NotificationService();
       await notificationService.init();
 
-      final recent = await apiService.getRecentEarthquakes();
-      if (recent.isNotEmpty) {
-        final latest = recent.first;
-        final prefs = await SharedPreferences.getInstance();
-        final lastId = prefs.getString('last_earthquake_id');
+      final prefs = await SharedPreferences.getInstance();
 
-        if (lastId != latest.id) {
-          await notificationService.showNotification(
-            id: latest.hashCode,
-            title: 'New Earthquake: ${latest.title}',
-            body: 'Magnitude: ${latest.magnitude}, Depth: ${latest.depth}km',
-          );
-          await prefs.setString('last_earthquake_id', latest.id);
+      // Get user's continent
+      final userContinent = prefs.getString('user_continent');
+      if (userContinent == null) {
+        debugPrint('User continent not available, skipping notification');
+        return Future.value(true);
+      }
+
+      // Check if app is active
+      final isAppActive = await AppLifecycleService.isAppActive();
+
+      // Get processed earthquake IDs to avoid duplicates
+      final processedIds =
+          prefs.getStringList('processed_earthquake_ids') ?? [];
+
+      final recent = await apiService.getRecentEarthquakes();
+
+      for (var earthquake in recent) {
+        // Skip if already processed
+        if (processedIds.contains(earthquake.id)) {
+          continue;
+        }
+
+        // Detect earthquake's continent
+        final earthquakeContinent = ContinentUtils.detectContinent(
+          earthquake.latitude,
+          earthquake.longitude,
+        );
+
+        // Determine if we should send notification
+        bool shouldNotify = false;
+        bool isHighPriority = false;
+
+        if (ContinentUtils.isSameContinent(
+          userContinent,
+          earthquakeContinent,
+        )) {
+          // Same continent: always notify with high priority
+          shouldNotify = true;
+          isHighPriority = true;
+        } else if (isAppActive) {
+          // Different continent: only notify if app is active, with normal priority
+          shouldNotify = true;
+          isHighPriority = false;
+        }
+
+        if (shouldNotify) {
+          if (isHighPriority) {
+            await notificationService.showHighPriorityNotification(
+              id: earthquake.hashCode,
+              title: '🚨 Nearby Earthquake: ${earthquake.title}',
+              body:
+                  'Magnitude: ${earthquake.magnitude} • Depth: ${earthquake.depth}km • $earthquakeContinent',
+            );
+          } else {
+            await notificationService.showNormalPriorityNotification(
+              id: earthquake.hashCode,
+              title: 'Earthquake Alert: ${earthquake.title}',
+              body:
+                  'Magnitude: ${earthquake.magnitude} • Depth: ${earthquake.depth}km • $earthquakeContinent',
+            );
+          }
+
+          // Mark as processed
+          processedIds.add(earthquake.id);
         }
       }
+
+      // Keep only last 100 processed IDs to prevent list from growing indefinitely
+      if (processedIds.length > 100) {
+        processedIds.removeRange(0, processedIds.length - 100);
+      }
+      await prefs.setStringList('processed_earthquake_ids', processedIds);
     } catch (e) {
       debugPrint('Background fetch error: $e');
     }
@@ -46,7 +107,12 @@ void callbackDispatcher() {
 }
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await AppInitializer.initializeApp();
+
+  // Initialize app lifecycle service
+  AppLifecycleService().init();
+
   Workmanager().initialize(callbackDispatcher);
   Workmanager().registerPeriodicTask(
     "1",

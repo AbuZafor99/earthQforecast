@@ -10,6 +10,10 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  // Channel IDs for different priority levels
+  static const String _highPriorityChannelId = 'earthquake_alerts_high';
+  static const String _normalPriorityChannelId = 'earthquake_alerts_normal';
+
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -19,6 +23,7 @@ class NotificationService {
           requestAlertPermission: true,
           requestBadgePermission: true,
           requestSoundPermission: true,
+          requestCriticalPermission: true, // For high-priority alerts
         );
 
     final InitializationSettings initializationSettings =
@@ -46,7 +51,8 @@ class NotificationService {
     }
   }
 
-  Future<void> showNotification({
+  /// Show high-priority notification (for same-continent earthquakes)
+  Future<void> showHighPriorityNotification({
     required int id,
     required String title,
     required String body,
@@ -54,17 +60,31 @@ class NotificationService {
   }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-          'earthquake_alerts',
-          'Earthquake Alerts',
-          channelDescription: 'Notifications for new earthquakes',
+          _highPriorityChannelId,
+          'Critical Earthquake Alerts',
+          channelDescription:
+              'High-priority notifications for nearby earthquakes',
           importance: Importance.max,
           priority: Priority.high,
           ticker: 'ticker',
-          icon: 'ic_notification', // Custom notification icon
+          icon: 'ic_notification',
+          enableVibration: true,
+          playSound: true,
+          visibility: NotificationVisibility.public,
+          category: AndroidNotificationCategory.alarm,
+        );
+
+    const DarwinNotificationDetails iosPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.critical,
         );
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
+      iOS: iosPlatformChannelSpecifics,
     );
 
     await flutterLocalNotificationsPlugin.show(
@@ -72,6 +92,64 @@ class NotificationService {
       title,
       body,
       platformChannelSpecifics,
+      payload: payload,
+    );
+  }
+
+  /// Show normal-priority notification (for other-continent earthquakes)
+  Future<void> showNormalPriorityNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+          _normalPriorityChannelId,
+          'Earthquake Updates',
+          channelDescription: 'Notifications for earthquakes worldwide',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          ticker: 'ticker',
+          icon: 'ic_notification',
+          enableVibration: false,
+          playSound: false,
+        );
+
+    const DarwinNotificationDetails iosPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: false,
+          interruptionLevel: InterruptionLevel.passive,
+        );
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iosPlatformChannelSpecifics,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      id,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: payload,
+    );
+  }
+
+  /// Legacy method for backward compatibility
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    // Default to high priority for backward compatibility
+    await showHighPriorityNotification(
+      id: id,
+      title: title,
+      body: body,
       payload: payload,
     );
   }

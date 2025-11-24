@@ -1,3 +1,5 @@
+import '../../../../core/utils/continent_utils.dart';
+
 class EarthquakeModel {
   final String id;
   final double magnitude;
@@ -9,6 +11,7 @@ class EarthquakeModel {
   final double latitude;
   final double longitude;
   final double depth;
+  final String continent;
 
   EarthquakeModel({
     required this.id,
@@ -21,12 +24,16 @@ class EarthquakeModel {
     required this.latitude,
     required this.longitude,
     required this.depth,
+    required this.continent,
   });
 
   factory EarthquakeModel.fromJson(Map<String, dynamic> json) {
     final properties = json['properties'];
     final geometry = json['geometry'];
     final coordinates = geometry['coordinates'];
+
+    final lat = (coordinates[1] as num?)?.toDouble() ?? 0.0;
+    final lng = (coordinates[0] as num?)?.toDouble() ?? 0.0;
 
     return EarthquakeModel(
       id: json['id'] ?? '',
@@ -36,9 +43,10 @@ class EarthquakeModel {
       url: properties['url'] ?? '',
       tsunami: properties['tsunami'] ?? 0,
       title: properties['title'] ?? '',
-      longitude: (coordinates[0] as num?)?.toDouble() ?? 0.0,
-      latitude: (coordinates[1] as num?)?.toDouble() ?? 0.0,
+      longitude: lng,
+      latitude: lat,
       depth: (coordinates[2] as num?)?.toDouble() ?? 0.0,
+      continent: ContinentUtils.detectContinent(lat, lng),
     );
   }
 }

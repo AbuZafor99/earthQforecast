@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/location_service.dart';
+import '../utils/continent_utils.dart';
 
 class LocationController extends GetxController {
   final LocationService _locationService = LocationService();
@@ -8,11 +9,21 @@ class LocationController extends GetxController {
   final Rx<Position?> currentPosition = Rx<Position?>(null);
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
+  final RxString userContinent = ''.obs;
 
   @override
   void onInit() {
     super.onInit();
     getUserLocation();
+    _loadCachedContinent();
+  }
+
+  /// Load cached continent from shared preferences
+  Future<void> _loadCachedContinent() async {
+    final cached = await LocationService.getCachedContinent();
+    if (cached != null) {
+      userContinent.value = cached;
+    }
   }
 
   Future<void> getUserLocation() async {
@@ -21,6 +32,13 @@ class LocationController extends GetxController {
     try {
       final position = await _locationService.getCurrentLocation();
       currentPosition.value = position;
+
+      // Update continent
+      final continent = ContinentUtils.detectContinent(
+        position.latitude,
+        position.longitude,
+      );
+      userContinent.value = continent;
     } catch (e) {
       error.value = e.toString();
     } finally {
@@ -39,5 +57,10 @@ class LocationController extends GetxController {
           lng,
         ) /
         1000; // Return in km
+  }
+
+  /// Get continent for given coordinates
+  String getContinentForCoordinates(double lat, double lng) {
+    return ContinentUtils.detectContinent(lat, lng);
   }
 }
