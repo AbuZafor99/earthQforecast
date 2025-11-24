@@ -1,11 +1,14 @@
 import 'package:dio/dio.dart';
 import '../models/earthquake_model.dart';
 import '../models/news_model.dart';
+import 'dart:math' as math;
 
 class ApiService {
   final Dio _dio = Dio();
   static const String _baseUrl =
       'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary';
+  static const String _emscBaseUrl =
+      'https://www.seismicportal.eu/fdsnws/event/1/query';
 
   // News API configuration
   static const String _newsApiKey =
@@ -44,6 +47,154 @@ class ApiService {
     } catch (e) {
       throw Exception('Error fetching significant earthquakes: $e');
     }
+  }
+
+  // Fetch all earthquakes from the last 30 days (for search and Near Me)
+  Future<List<EarthquakeModel>> getAllMonthEarthquakes() async {
+    try {
+      final response = await _dio.get('$_baseUrl/all_month.geojson');
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final List features = data['features'];
+        return features.map((e) => EarthquakeModel.fromJson(e)).toList();
+      } else {
+        throw Exception('Failed to load month earthquakes');
+      }
+    } catch (e) {
+      throw Exception('Error fetching month earthquakes: $e');
+    }
+  }
+
+  // Fetch earthquakes from EMSC (European-Mediterranean Seismological Centre)
+  Future<List<EarthquakeModel>> getEMSCEarthquakes({int days = 1}) async {
+    try {
+      final now = DateTime.now();
+      final startTime = now.subtract(Duration(days: days));
+
+      final queryParams = {
+        'format': 'json',
+        'start': startTime.toIso8601String(),
+        'end': now.toIso8601String(),
+        'minmag': '2.5',
+        'limit': '1000',
+      };
+
+      final response = await _dio.get(
+        _emscBaseUrl,
+        queryParameters: queryParams,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map && data.containsKey('features')) {
+          final List features = data['features'];
+          return features.map((e) => _parseEMSCEvent(e)).toList();
+        }
+        return [];
+      } else {
+        print('EMSC API returned status: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Error fetching EMSC earthquakes: $e');
+      return []; // Return empty list on error, don't throw
+    }
+  }
+
+  // Parse EMSC event to EarthquakeModel
+  EarthquakeModel _parseEMSCEvent(Map<String, dynamic> event) {
+    final properties = event['properties'] ?? {};
+    final geometry = event['geometry'] ?? {};
+    final coordinates = geometry['coordinates'] ?? [0.0, 0.0, 0.0];
+
+    return EarthquakeModel(
+      id: event['id'] ?? 'emsc_${DateTime.now().millisecondsSinceEpoch}',
+      magnitude: (properties['mag'] ?? 0.0).toDouble(),
+      place: properties['flynn_region'] ?? properties['place'] ?? 'Unknown',
+      time: DateTime.parse(
+        properties['time'] ?? DateTime.now().toIso8601String(),
+      ).millisecondsSinceEpoch,
+      latitude: (coordinates[1] ?? 0.0).toDouble(),
+      longitude: (coordinates[0] ?? 0.0).toDouble(),
+      depth: (coordinates[2] ?? 0.0).toDouble(),
+      title:
+          'M ${(properties['mag'] ?? 0.0).toDouble().toStringAsFixed(1)} - ${properties['flynn_region'] ?? properties['place'] ?? 'Unknown'}',
+      url: '', // EMSC doesn't provide URL in same format
+      tsunami: 0, // EMSC doesn't provide tsunami info
+    );
+  }
+
+  // Deduplicate earthquakes from multiple sources
+  List<EarthquakeModel> deduplicateEarthquakes(
+    List<EarthquakeModel> earthquakes,
+  ) {
+    final Map<String, EarthquakeModel> uniqueEarthquakes = {};
+
+    for (var earthquake in earthquakes) {
+      // Check if we already have a similar earthquake
+      bool isDuplicate = false;
+
+      for (var existing in uniqueEarthquakes.values) {
+        // Consider it a duplicate if:
+        // 1. Location is within 10km
+        // 2. Time is within 5 minutes
+        // 3. Magnitude is within 0.3
+
+        final distance = _calculateDistance(
+          earthquake.latitude,
+          earthquake.longitude,
+          existing.latitude,
+          existing.longitude,
+        );
+
+        final timeDiff = (earthquake.time - existing.time).abs();
+        final magDiff = (earthquake.magnitude - existing.magnitude).abs();
+
+        if (distance < 10 && timeDiff < 300000 && magDiff < 0.3) {
+          isDuplicate = true;
+          // Keep the one with higher magnitude or more recent
+          if (earthquake.magnitude > existing.magnitude ||
+              (earthquake.magnitude == existing.magnitude &&
+                  earthquake.time > existing.time)) {
+            uniqueEarthquakes[existing.id] = earthquake;
+          }
+          break;
+        }
+      }
+
+      if (!isDuplicate) {
+        uniqueEarthquakes[earthquake.id] = earthquake;
+      }
+    }
+
+    return uniqueEarthquakes.values.toList();
+  }
+
+  // Calculate distance between two coordinates (Haversine formula)
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const R = 6371; // Earth's radius in km
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) *
+            math.cos(_toRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+
+    final c = 2 * math.asin(math.sqrt(a));
+    return R * c;
+  }
+
+  double _toRadians(double degrees) {
+    return degrees * (3.141592653589793 / 180);
   }
 
   // Fetch real earthquake news from News API

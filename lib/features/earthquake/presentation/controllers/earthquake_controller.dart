@@ -15,6 +15,8 @@ class EarthquakeController extends GetxController {
   final RxList<EarthquakeModel> recentEarthquakes = <EarthquakeModel>[].obs;
   final RxList<EarthquakeModel> significantEarthquakes =
       <EarthquakeModel>[].obs;
+  final RxList<EarthquakeModel> monthEarthquakes =
+      <EarthquakeModel>[].obs; // For search and Near Me
   final RxList<NewsModel> news = <NewsModel>[].obs;
 
   // Filter and Search
@@ -22,6 +24,7 @@ class EarthquakeController extends GetxController {
   final RxString filterType = 'All'.obs; // 'All', 'Near Me', 'Significant'
 
   final RxBool isLoading = false.obs;
+  final RxBool isUpdating = false.obs; // For incremental updates
   final RxString errorMessage = ''.obs;
   final RxBool isMapDarkMode = true.obs; // Default to dark mode
 
@@ -57,21 +60,12 @@ class EarthquakeController extends GetxController {
   }
 
   List<EarthquakeModel> get filteredEarthquakes {
-    // If there's a search query, search across ALL data (both recent and significant)
+    // If there's a search query, search across MONTH data
     if (searchQuery.value.isNotEmpty) {
       final query = searchQuery.value.toLowerCase().trim();
 
-      // Combine all earthquake data for search
-      final allEarthquakes = [...recentEarthquakes, ...significantEarthquakes];
-
-      // Remove duplicates based on ID
-      final uniqueEarthquakes = <String, EarthquakeModel>{};
-      for (var eq in allEarthquakes) {
-        uniqueEarthquakes[eq.id] = eq;
-      }
-
-      // Search across all unique earthquakes
-      final searchResults = uniqueEarthquakes.values.where((e) {
+      // Search across month earthquakes
+      final searchResults = monthEarthquakes.where((e) {
         final title = e.title.toLowerCase();
         final place = e.place.toLowerCase();
 
@@ -98,9 +92,11 @@ class EarthquakeController extends GetxController {
     // If no search query, apply normal filtering
     List<EarthquakeModel> list;
     if (filterType.value == 'Significant') {
-      list = significantEarthquakes;
+      list = significantEarthquakes; // Already month data
+    } else if (filterType.value == 'All') {
+      list = recentEarthquakes; // 24-hour data
     } else {
-      list = recentEarthquakes;
+      list = monthEarthquakes; // Use month data for Near Me
     }
 
     // Apply Filter
@@ -144,33 +140,65 @@ class EarthquakeController extends GetxController {
     try {
       // Fetch Recent
       final recentResult = await _repository.getRecentEarthquakes();
-      recentResult.fold((failure) => errorMessage.value = failure.message, (
-        data,
-      ) {
-        // Check for new earthquakes compared to current list
-        if (recentEarthquakes.isNotEmpty && data.isNotEmpty) {
-          final latestId = data.first.id;
-          final currentLatestId = recentEarthquakes.first.id;
+      recentResult.fold(
+        (failure) => errorMessage.value = failure.message ?? 'Unknown error',
+        (data) {
+          // Check for new earthquakes compared to current list
+          if (recentEarthquakes.isNotEmpty && data.isNotEmpty) {
+            final latestId = data.first.id;
+            final currentLatestId = recentEarthquakes.first.id;
 
-          if (latestId != currentLatestId) {
-            _notificationService.showNotification(
-              id: 1,
-              title: 'New Earthquake Detected',
-              body: '${data.first.title}',
-            );
+            if (latestId != currentLatestId) {
+              _notificationService.showNotification(
+                id: 1,
+                title: 'New Earthquake Detected',
+                body: '${data.first.title}',
+              );
+            }
           }
-        }
 
-        recentEarthquakes.value = data;
-        _sortByTime();
-        checkForNearbyEarthquakes(data);
-      });
+          recentEarthquakes.value = data;
+          _sortByTime();
+          checkForNearbyEarthquakes(data);
+        },
+      );
 
-      // Fetch Significant
+      // Fetch Significant (month data)
       final significantResult = await _repository.getSignificantEarthquakes();
       significantResult.fold((failure) {
-        if (errorMessage.value.isEmpty) errorMessage.value = failure.message;
+        if (errorMessage.value.isEmpty)
+          errorMessage.value = failure.message ?? 'Unknown error';
       }, (data) => significantEarthquakes.value = data);
+
+      // Fetch Month Earthquakes (for search and Near Me)
+      // Merge USGS month data with EMSC data for comprehensive coverage
+      final monthResult = await _repository.getAllMonthEarthquakes();
+      List<EarthquakeModel> allMonthData = [];
+
+      monthResult.fold((failure) {
+        if (errorMessage.value.isEmpty)
+          errorMessage.value = failure.message ?? 'Unknown error';
+      }, (data) => allMonthData.addAll(data));
+
+      // Fetch EMSC data (past 30 days)
+      try {
+        final emscData = await Get.find<ApiService>().getEMSCEarthquakes(
+          days: 30,
+        );
+        allMonthData.addAll(emscData);
+        print('Fetched ${emscData.length} earthquakes from EMSC');
+      } catch (e) {
+        print('Error fetching EMSC data: $e');
+      }
+
+      // Deduplicate combined data
+      final deduplicatedData = Get.find<ApiService>().deduplicateEarthquakes(
+        allMonthData,
+      );
+      monthEarthquakes.value = deduplicatedData;
+      print(
+        'Total earthquakes after deduplication: ${deduplicatedData.length}',
+      );
 
       // Fetch News
       try {

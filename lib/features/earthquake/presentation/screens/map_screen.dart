@@ -155,20 +155,51 @@ class MapScreen extends GetView<EarthquakeController> {
                 ),
               ),
             ),
-            // Map Style Toggle
+            // Day/Night Mode Toggle
             Positioned(
-              top: 50,
-              right: 20,
-              child: FloatingActionButton.small(
-                heroTag: 'map_style_toggle',
-                onPressed: () => controller.isMapDarkMode.toggle(),
-                backgroundColor: Theme.of(context).cardColor,
-                child: Icon(
-                  controller.isMapDarkMode.value
-                      ? Icons.wb_sunny
-                      : Icons.nightlight_round,
-                  color: Theme.of(context).iconTheme.color,
-                ),
+              top: 60,
+              right: 16,
+              child: _buildGlossyButton(
+                icon: controller.isMapDarkMode.value
+                    ? Icons.light_mode_rounded
+                    : Icons.dark_mode_rounded,
+                onTap: () {
+                  controller.isMapDarkMode.value =
+                      !controller.isMapDarkMode.value;
+                },
+                context: context,
+              ),
+            ),
+            // Zoom Controls
+            Positioned(
+              bottom: 100,
+              right: 16,
+              child: Column(
+                children: [
+                  _buildGlossyButton(
+                    icon: Icons.add_rounded,
+                    onTap: () {
+                      final currentZoom = mapController.camera.zoom;
+                      mapController.move(
+                        mapController.camera.center,
+                        currentZoom + 1,
+                      );
+                    },
+                    context: context,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGlossyButton(
+                    icon: Icons.remove_rounded,
+                    onTap: () {
+                      final currentZoom = mapController.camera.zoom;
+                      mapController.move(
+                        mapController.camera.center,
+                        currentZoom - 1,
+                      );
+                    },
+                    context: context,
+                  ),
+                ],
               ),
             ),
             _buildRecenterButton(mapController, locationController),
@@ -257,6 +288,56 @@ class MapScreen extends GetView<EarthquakeController> {
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlossyButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    required BuildContext context,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    const Color(0xFF1F2937).withOpacity(0.9),
+                    const Color(0xFF111827).withOpacity(0.95),
+                  ]
+                : [
+                    Colors.white.withOpacity(0.9),
+                    Colors.white.withOpacity(0.7),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          color: isDark ? Colors.white : Colors.black87,
+          size: 24,
         ),
       ),
     );

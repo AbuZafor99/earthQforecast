@@ -35,9 +35,9 @@ class ApiConstants {
   static LoadEndpoints get load => LoadEndpoints();
 
   static GetProfile get getProfile => GetProfile();
-  
+
   static PlanEndpoints get plan => PlanEndpoints();
-  
+
   static PaymentEndpoints get payment => PaymentEndpoints();
 }
 
@@ -61,18 +61,16 @@ class AuthEndpoints {
 
 class GetProfile {
   static const String _baseUrl = ApiConstants.baseUrl;
-  
+
   // Single endpoint for all roles - backend handles role-based logic
   String fetchProfileByRole(String role) {
     return '$_baseUrl/user/profile';
   }
-  
-  
+
   String updateProfileByRole(String role) {
     return '$_baseUrl/user/update-profile';
   }
-  
-  
+
   // Legacy endpoints for backward compatibility
   final String fetchProfile = '$_baseUrl/user/profile';
   final String updateProfile = '$_baseUrl/user/update-profile';
@@ -126,7 +124,7 @@ class PaymentEndpoints {
   final String confirmPayment = '$_base/confirm-payment';
 }
 
-class AskPriceEndpoints{
+class AskPriceEndpoints {
   static const String _base = '${ApiConstants.baseUrl}/load';
 
   String askPrice(String id) => '$_base/$id/ask-price';
