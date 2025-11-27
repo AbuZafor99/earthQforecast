@@ -2,8 +2,6 @@
 
 <div align="center">
 
-![App Logo](/.gemini/antigravity/brain/7002301f-529e-49c0-ab40-42c70f7c32d6/earthquake_app_logo_1763953967544.png)
-
 **A modern Flutter application for real-time earthquake monitoring and awareness**
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.0+-02569B?logo=flutter)](https://flutter.dev)
@@ -79,7 +77,14 @@ This application was created in response to the recent earthquake incident in Ba
 
 ## 📱 Screenshots
 
-> *Add your app screenshots here*
+<div align="center">
+
+<img src="https://drive.google.com/file/d/1qHlLYR7ZT6V0bDvE1xre3NN7fEP9EgOP/view?usp=sharing" width="250" />
+<img src="https://drive.google.com/file/d/1qHlLYR7ZT6V0bDvE1xre3NN7fEP9EgOP/view?usp=sharing" width="250" />
+<!-- <img src="https://drive.google.com/uc?export=view&id=YOUR_SCREENSHOT_ID_3" width="250" /> -->
+
+</div>
+
 
 ## 🚀 Installation
 
