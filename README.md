@@ -79,8 +79,9 @@ This application was created in response to the recent earthquake incident in Ba
 
 <div align="center">
 
-<img src="https://drive.google.com/file/d/1c5p_9INdPkC1WlKK90u5d8gQJ3qOWnJV/view?usp=sharing" width="250" />
-<img src="https://drive.google.com/file/d/1qHlLYR7ZT6V0bDvE1xre3NN7fEP9EgOP/view?usp=sharing" width="250" />
+<img src="https://drive.google.com/uc?export=view&id=1c5p_9INdPkC1WlKK90u5d8gQJ3qOWnJV" width="250" />
+<img src="https://drive.google.com/uc?export=view&id=1qHlLYR7ZT6V0bDvE1xre3NN7fEP9EgOP" width="250" />
+
 <!-- <img src="https://drive.google.com/uc?export=view&id=YOUR_SCREENSHOT_ID_3" width="250" /> -->
 
 </div>
